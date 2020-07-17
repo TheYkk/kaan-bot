@@ -16,10 +16,3 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-.dockerignore
-Dockerfile
-README.md
-conf.yml
-go.mod
-main.go
-
