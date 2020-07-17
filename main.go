@@ -102,11 +102,19 @@ func handleEvent(gc *github.Client, eventType string, bytesIn []byte) error {
 		if err := json.Unmarshal(bytesIn, &req); err != nil {
 			return fmt.Errorf("Cannot parse input %s", err.Error())
 		}
+		var lines []string
+		if req.Comment.Body == "" {
+			lines = strings.Split(req.Issue.Body, "\n")
+		} else {
+			lines = strings.Split(req.Comment.Body, "\n")
+		}
 
-		lines := strings.Split(req.Comment.Body, "\n")
 		// * Parse lines
 
 		for _, line := range lines {
+
+			log.Print(line)
+
 			labelMatches := label.LabelRegex.FindAllStringSubmatch(line, -1)
 			removeLabelMatches := label.RemoveLabelRegex.FindAllStringSubmatch(line, -1)
 			customLabelMatches := label.CustomLabelRegex.FindAllStringSubmatch(line, -1)

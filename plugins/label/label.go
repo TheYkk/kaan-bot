@@ -22,8 +22,12 @@ func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
 
 	ctx := context.Background()
 
-	org := req.Repository.Owner
-	repo := req.Repository.Name
+	var (
+		org    = req.Repository.Owner.Login
+		repo   = req.Repository.Name
+		number = req.Issue.Number
+		//user   = req.Comment.User
+	)
 	var (
 		labelsToAdd         []string
 		labelsToRemove      []string
@@ -34,13 +38,13 @@ func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
 	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches)...)
 
 	// * Add labels to label
-	if _, _, err := gc.Issues.AddLabelsToIssue(ctx,org,repo,req.Issue.Number,labelsToAdd); err != nil {
+	if _, _, err := gc.Issues.AddLabelsToIssue(ctx,org,repo,number,labelsToAdd); err != nil {
 		return fmt.Errorf("GitHub failed to add the following labels: %v", labelsToAdd)
 	}
 
 	// * Remove labels from label
 	for _, labelToRemove := range labelsToRemove {
-		if _, err := gc.Issues.RemoveLabelForIssue(ctx,org,repo,req.Issue.Number,labelToRemove); err != nil {
+		if _, err := gc.Issues.RemoveLabelForIssue(ctx,org,repo,number,labelToRemove); err != nil {
 			return fmt.Errorf("GitHub failed to add the following label: %s", labelsToAdd)
 		}
 	}

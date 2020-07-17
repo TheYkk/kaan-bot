@@ -49,6 +49,7 @@ type Issue struct {
 	Labels    []IssueLabel `json:"labels"`
 	Number    int          `json:"number"`
 	Title     string       `json:"title"`
+	Body      string       `json:"body"`
 	Locked    bool         `json:"locked"`
 	State     string       `json:"state"`
 	Milestone Milestone    `json:"milestone"`

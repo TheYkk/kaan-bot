@@ -30,7 +30,7 @@ func Handle(gc *github.Client, line string, req types.IssueCommentOuter) error {
 	}
 
 	var (
-		org    = req.Repository.Owner
+		org    = req.Repository.Owner.Login
 		repo   = req.Repository.Name
 		number = req.Issue.Number
 		//user   = req.Comment.User
@@ -54,7 +54,7 @@ func Handle(gc *github.Client, line string, req types.IssueCommentOuter) error {
 	newTitle := strings.TrimSpace(matches[1])
 	if newTitle == "" {
 		com := "Titles may not be empty."
-		_, _, _ = gc.Issues.CreateComment(ctx, *org, *repo, number,  &github.IssueComment{
+		_, _, _ = gc.Issues.CreateComment(ctx, org, repo, number,  &github.IssueComment{
 			Body: &com,
 		})
 	}
