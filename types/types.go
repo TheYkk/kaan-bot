@@ -72,26 +72,7 @@ type CommentAction struct {
 	Value string
 }
 
-// DerekRepoConfig is a config for a Derek-enabled repository
-type DerekRepoConfig struct {
 
-	// A redirect URL to load the config from another location.
-	Redirect string
-
-	// Features can be turned on/off if needed.
-	Features []string
-
-	// Users who are enrolled to make use of Derek
-	Maintainers []string
-
-	// Curators is an alias for Maintainers and is only used if the Maintainers list is empty.
-	Curators []string
-
-	//ContributingURL url to contribution guide
-	ContributingURL string `yaml:"contributing_url"`
-
-	Messages []Message `yaml:"custom_messages"`
-}
 
 type Message struct {
 	Name  string `yaml:"name"`

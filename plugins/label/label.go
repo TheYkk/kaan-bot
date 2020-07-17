@@ -1,4 +1,4 @@
-package issue
+package label
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
 
 	ctx := context.Background()
 
-	org := req.Repository.Owner.Login
+	org := req.Repository.Owner
 	repo := req.Repository.Name
 	var (
 		labelsToAdd         []string
@@ -33,12 +33,12 @@ func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
 	labelsToAdd = append(getLabelsFromREMatches(labelMatches), getLabelsFromGenericMatches(customLabelMatches)...)
 	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches)...)
 
-	// * Add labels to issue
+	// * Add labels to label
 	if _, _, err := gc.Issues.AddLabelsToIssue(ctx,org,repo,req.Issue.Number,labelsToAdd); err != nil {
 		return fmt.Errorf("GitHub failed to add the following labels: %v", labelsToAdd)
 	}
 
-	// * Remove labels from issue
+	// * Remove labels from label
 	for _, labelToRemove := range labelsToRemove {
 		if _, err := gc.Issues.RemoveLabelForIssue(ctx,org,repo,req.Issue.Number,labelToRemove); err != nil {
 			return fmt.Errorf("GitHub failed to add the following label: %s", labelsToAdd)
