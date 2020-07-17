@@ -59,6 +59,7 @@ func Handle(gc *github.Client, line string, req types.IssueCommentOuter) error {
 		})
 	}
 
+	// TODO: find if pull request
 	//if req.Action == "" {
 	//	pr, err := gc.GetPullRequest(org, repo, number)
 	//	if err != nil {

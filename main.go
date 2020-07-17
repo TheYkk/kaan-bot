@@ -103,7 +103,9 @@ func handleEvent(gc *github.Client, eventType string, bytesIn []byte) error {
 			return fmt.Errorf("Cannot parse input %s", err.Error())
 		}
 		var lines []string
-		if req.Comment.Body == "" {
+
+
+		if req.Action == "opened" {
 			lines = strings.Split(req.Issue.Body, "\n")
 		} else {
 			lines = strings.Split(req.Comment.Body, "\n")
