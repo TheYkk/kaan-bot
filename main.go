@@ -35,24 +35,33 @@ func init() {
 func main() {
 	log.Printf("Init kaan-bot %s %s ", Version, GitCommit)
 
+	secret := helper.Getenv("GITHUB_SECRET", "")
+	if secret == "" {
+		log.Fatal("Github webhook secret not set")
+		return
+	}
+
+	token := helper.Getenv("GITHUB_TOKEN", "")
+	if token == "" {
+		log.Error("Github token not set")
+
+	}
+
 	// ? Create http server
-	r := gin.Default()
+	server := gin.Default()
 
 	// ? Set logger to logrus
-	r.Use(Logger(log.New()), gin.Recovery())
-	r.GET("/health", func(c *gin.Context) {
+	server.Use(Logger(log.New()), gin.Recovery())
+	server.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
 	})
-	r.POST("/", func(c *gin.Context) {
+
+	server.POST("/", func(c *gin.Context) {
 
 		// * Get gihtub signature
 		xHubSignature := c.GetHeader("X-Hub-Signature")
 
-		secret := helper.Getenv("GITHUB_SECRET", "")
-		if secret == "" {
-			log.Fatal("Github webhook secret not set")
-			return
-		}
+
 		// * Validate request
 
 		rawData, _ := c.GetRawData()
@@ -62,11 +71,7 @@ func main() {
 		}
 
 		// ? Login with cred
-		token := helper.Getenv("GITHUB_TOKEN", "")
-		if token == "" {
-			log.Error("Github token not set")
 
-		}
 		ctx := context.Background()
 		client := ghub.Login(ctx, token)
 
@@ -81,7 +86,7 @@ func main() {
 	})
 
 	// ? listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
-	r.Run()
+	server.Run("0.0.0.0:8181")
 }
 
 //TTT
