@@ -1,0 +1,13 @@
+#!/bin/bash -ex
+
+if [ -n "$VERSION" ]; then
+	return
+fi
+
+VERSION=$(git tag -l --contains HEAD | head -n 1)
+if [ -z "$VERSION" ]; then
+    VERSION=$(git rev-parse --short HEAD)
+    if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+        VERSION="v$(date +"%Y%m%d")-$VERSION"
+    fi
+fi

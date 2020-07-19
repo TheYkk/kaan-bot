@@ -1,0 +1,11 @@
+#!/bin/sh
+set -ex
+
+cd "$(dirname $0)"/..
+
+. ./scripts/version
+
+
+CGO_ENABLED=0 go build -a -tags netgo -installsuffix netgo -ldflags "-X main.VERSION=$VERSION -extldflags '-static -s'" -o kaan-bot main.go
+echo Built kaan-bot
+
