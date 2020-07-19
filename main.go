@@ -21,7 +21,6 @@ import (
 
 var (
 	Version   = "dev"
-	GitCommit = "HEAD"
 )
 
 func init() {
@@ -33,7 +32,7 @@ func init() {
 }
 
 func main() {
-	log.Printf("Init kaan-bot %s %s ", Version, GitCommit)
+	log.Printf("Init kaan-bot %s %s ", Version)
 
 	secret := helper.Getenv("GITHUB_SECRET", "")
 	if secret == "" {
