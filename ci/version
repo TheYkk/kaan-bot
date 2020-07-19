@@ -1,4 +1,6 @@
-#!/bin/bash -ex
+#!/bin/sh
+set -ex
+
 
 if [ -n "$VERSION" ]; then
 	return
