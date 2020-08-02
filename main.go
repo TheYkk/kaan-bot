@@ -84,8 +84,11 @@ func main() {
 
 	})
 
-	// ? listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
-	server.Run("0.0.0.0:8181")
+	// ? listen and serve on 0.0.0.0:8181
+	err := server.Run("0.0.0.0:8181")
+	if err != nil {
+		log.Fatalf("Server err %s",err)
+	}
 }
 
 //TTT
