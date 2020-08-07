@@ -78,6 +78,9 @@ func main() {
 			// Do whatever you want from here...
 			fmt.Printf("%+v", pullRequest.Repository.FullName)
 
+			// TODO: Size plugin
+			// TODO: DCO
+
 		case webhook.IssueCommentPayload:
 			comment := payload.(webhook.IssueCommentPayload)
 			lines := strings.Split(comment.Comment.Body, "\n")
@@ -107,6 +110,10 @@ func main() {
 						log.Error(err)
 					}
 				}
+
+				// TODO: lgtm
+
+				// TODO: assign
 			}
 		}
 
