@@ -8,7 +8,6 @@ import (
 	"kaan-bot/helper"
 	"kaan-bot/plugins/label"
 	"kaan-bot/plugins/title"
-
 	"math"
 	"os"
 	"strings"
@@ -24,6 +23,7 @@ var (
 
 func init() {
 	log.SetFormatter(&log.JSONFormatter{})
+	log.SetReportCaller(true)
 }
 
 func main() {
@@ -66,24 +66,23 @@ func main() {
 				// ok event wasn;t one of the ones asked to be parsed
 			}
 		}
+
 		ctx := context.Background()
+		// ? Login to github
 		client := ghclient.Login(ctx, token)
 
 		switch payload.(type) {
 
-		case webhook.ReleasePayload:
-			release := payload.(webhook.ReleasePayload)
-			// Do whatever you want from here...
-			fmt.Printf("%+v", release)
-
 		case webhook.PullRequestPayload:
 			pullRequest := payload.(webhook.PullRequestPayload)
 			// Do whatever you want from here...
-			fmt.Printf("%+v", pullRequest)
+			fmt.Printf("%+v", pullRequest.Repository.FullName)
+
+			// TODO: Size plugin
+			// TODO: DCO
 
 		case webhook.IssueCommentPayload:
 			comment := payload.(webhook.IssueCommentPayload)
-
 			lines := strings.Split(comment.Comment.Body, "\n")
 
 			// * Parse lines
@@ -111,6 +110,10 @@ func main() {
 						log.Error(err)
 					}
 				}
+
+				// TODO: lgtm
+
+				// TODO: assign
 			}
 		}
 
