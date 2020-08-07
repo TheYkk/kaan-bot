@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/go-github/github"
+	log "github.com/sirupsen/logrus"
 	webhook "gopkg.in/go-playground/webhooks.v5/github"
+	ghclient "kaan-bot/github"
 	"regexp"
 	"strings"
 )
@@ -17,6 +19,7 @@ var (
 )
 
 func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
+
 	labelMatches := LabelRegex.FindAllStringSubmatch(line, -1)
 	removeLabelMatches := RemoveLabelRegex.FindAllStringSubmatch(line, -1)
 	customLabelMatches := CustomLabelRegex.FindAllStringSubmatch(line, -1)
@@ -37,6 +40,9 @@ func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) err
 
 	labelsToAdd = append(getLabelsFromREMatches(labelMatches), getLabelsFromGenericMatches(customLabelMatches)...)
 	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches)...)
+
+	_, err := ghclient.IsAuthor(req.Sender.Login, req.Repository.HTMLURL)
+	log.Error(err)
 
 	// * Add labels to label
 	if _, _, err := gc.Issues.AddLabelsToIssue(ctx, org, repo, int(number), labelsToAdd); err != nil {
