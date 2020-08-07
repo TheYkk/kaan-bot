@@ -3,7 +3,7 @@ package title
 import (
 	"context"
 	"github.com/google/go-github/github"
-	"kaan-bot/types"
+	webhook "gopkg.in/go-playground/webhooks.v5/github"
 	"regexp"
 	"strings"
 )
@@ -12,7 +12,7 @@ var (
 	RetitleRegex = regexp.MustCompile(`(?mi)^/retitle\s*(.*)$`)
 )
 
-func Handle(gc *github.Client, line string, req types.IssueCommentOuter) error {
+func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
 	// If closed/merged issues and PRs shouldn't be considered,
 	// return early if issue state is not open.
 	//if !allowClosedIssues && req.IssueState != "open" {
@@ -54,7 +54,7 @@ func Handle(gc *github.Client, line string, req types.IssueCommentOuter) error {
 	newTitle := strings.TrimSpace(matches[1])
 	if newTitle == "" {
 		com := "Titles may not be empty."
-		_, _, _ = gc.Issues.CreateComment(ctx, org, repo, number,  &github.IssueComment{
+		_, _, _ = gc.Issues.CreateComment(ctx, org, repo, int(number), &github.IssueComment{
 			Body: &com,
 		})
 	}

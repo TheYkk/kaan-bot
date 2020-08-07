@@ -4,17 +4,19 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/go-github/github"
-	"kaan-bot/types"
+	webhook "gopkg.in/go-playground/webhooks.v5/github"
 	"regexp"
 	"strings"
 )
+
 var (
 	LabelRegex             = regexp.MustCompile(`(?m)^/(area|committee|kind|language|priority|sig|triage|wg)\s*(.*?)\s*$`)
 	RemoveLabelRegex       = regexp.MustCompile(`(?m)^/remove-(area|committee|kind|language|priority|sig|triage|wg)\s*(.*?)\s*$`)
 	CustomLabelRegex       = regexp.MustCompile(`(?m)^/label\s*(.*?)\s*$`)
 	CustomRemoveLabelRegex = regexp.MustCompile(`(?m)^/remove-label\s*(.*?)\s*$`)
 )
-func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
+
+func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
 	labelMatches := LabelRegex.FindAllStringSubmatch(line, -1)
 	removeLabelMatches := RemoveLabelRegex.FindAllStringSubmatch(line, -1)
 	customLabelMatches := CustomLabelRegex.FindAllStringSubmatch(line, -1)
@@ -29,22 +31,21 @@ func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
 		//user   = req.Comment.User
 	)
 	var (
-		labelsToAdd         []string
-		labelsToRemove      []string
+		labelsToAdd    []string
+		labelsToRemove []string
 	)
-
 
 	labelsToAdd = append(getLabelsFromREMatches(labelMatches), getLabelsFromGenericMatches(customLabelMatches)...)
 	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches)...)
 
 	// * Add labels to label
-	if _, _, err := gc.Issues.AddLabelsToIssue(ctx,org,repo,number,labelsToAdd); err != nil {
+	if _, _, err := gc.Issues.AddLabelsToIssue(ctx, org, repo, int(number), labelsToAdd); err != nil {
 		return fmt.Errorf("GitHub failed to add the following labels: %v", labelsToAdd)
 	}
 
 	// * Remove labels from label
 	for _, labelToRemove := range labelsToRemove {
-		if _, err := gc.Issues.RemoveLabelForIssue(ctx,org,repo,number,labelToRemove); err != nil {
+		if _, err := gc.Issues.RemoveLabelForIssue(ctx, org, repo, int(number), labelToRemove); err != nil {
 			return fmt.Errorf("GitHub failed to add the following label: %s", labelsToAdd)
 		}
 	}
