@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/go-github/github"
-	log "github.com/sirupsen/logrus"
 	webhook "gopkg.in/go-playground/webhooks.v5/github"
-	ghclient "kaan-bot/github"
 	"regexp"
 	"strings"
 )
@@ -31,18 +29,23 @@ func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) err
 		org    = req.Repository.Owner.Login
 		repo   = req.Repository.Name
 		number = req.Issue.Number
-		//user   = req.Comment.User
-	)
-	var (
+		user   = req.Comment.User.Login
+
 		labelsToAdd    []string
 		labelsToRemove []string
 	)
+	isAuthor, _, err := gc.Organizations.IsMember(ctx, org, user)
+	IsCollaborator, _, err := gc.Repositories.IsCollaborator(ctx, org, repo, user)
+	perm := false
+	if isAuthor || IsCollaborator {
+		perm = true
+	}
+	labelsToAdd = append(getLabelsFromREMatches(labelMatches), getLabelsFromGenericMatches(customLabelMatches, perm)...)
+	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches, perm)...)
 
-	labelsToAdd = append(getLabelsFromREMatches(labelMatches), getLabelsFromGenericMatches(customLabelMatches)...)
-	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches)...)
-
-	_, err := ghclient.IsAuthor(req.Sender.Login, req.Repository.HTMLURL)
-	log.Error(err)
+	if err != nil {
+		return err
+	}
 
 	// * Add labels to label
 	if _, _, err := gc.Issues.AddLabelsToIssue(ctx, org, repo, int(number), labelsToAdd); err != nil {
@@ -68,9 +71,14 @@ func getLabelsFromREMatches(matches [][]string) (labels []string) {
 	}
 	return
 }
-func getLabelsFromGenericMatches(matches [][]string) []string {
+func getLabelsFromGenericMatches(matches [][]string, perm bool) []string {
 
 	var labels []string
+
+	if !perm {
+		return labels
+	}
+
 	for _, match := range matches {
 		parts := strings.Split(strings.TrimSpace(match[0]), " ")
 		if ((parts[0] != "/label") && (parts[0] != "/remove-label")) || len(parts) != 2 {

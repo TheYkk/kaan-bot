@@ -14,18 +14,7 @@ var (
 )
 
 func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
-	// If closed/merged issues and PRs shouldn't be considered,
-	// return early if issue state is not open.
-	//if !allowClosedIssues && req.IssueState != "open" {
-	//	return nil
-	//}
-	//
-	//// Only consider new comments.
-	//if req.Action != github.GenericCommentActionCreated {
-	//	return nil
-	//}
-
-	// Make sure they are requesting a re-title
+	// ? Make sure they are requesting a re-title
 	if !RetitleRegex.MatchString(line) {
 		return nil
 	}
@@ -36,15 +25,6 @@ func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) err
 		number = req.Issue.Number
 		user   = req.Comment.User.Login
 	)
-
-	//trusted, err := isTrusted(user)
-	//if err != nil {
-	//	log.WithError(err).Error("Could not check if user was trusted.")
-	//	return err
-	//}
-	//if !trusted {
-	//	return gc.CreateComment(org, repo, number, plugins.FormatResponseRaw(req.Body, req.HTMLURL, user, `Re-titling can only be requested by trusted users, like repository collaborators.`))
-	//}
 	ctx := context.Background()
 
 	matches := RetitleRegex.FindStringSubmatch(line)
