@@ -1,20 +1,23 @@
-package issue
+package label
 
 import (
 	"context"
 	"fmt"
 	"github.com/google/go-github/github"
-	"kaan-bot/types"
+	webhook "gopkg.in/go-playground/webhooks.v5/github"
 	"regexp"
 	"strings"
 )
+
 var (
 	LabelRegex             = regexp.MustCompile(`(?m)^/(area|committee|kind|language|priority|sig|triage|wg)\s*(.*?)\s*$`)
 	RemoveLabelRegex       = regexp.MustCompile(`(?m)^/remove-(area|committee|kind|language|priority|sig|triage|wg)\s*(.*?)\s*$`)
 	CustomLabelRegex       = regexp.MustCompile(`(?m)^/label\s*(.*?)\s*$`)
 	CustomRemoveLabelRegex = regexp.MustCompile(`(?m)^/remove-label\s*(.*?)\s*$`)
 )
-func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
+
+func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
+
 	labelMatches := LabelRegex.FindAllStringSubmatch(line, -1)
 	removeLabelMatches := RemoveLabelRegex.FindAllStringSubmatch(line, -1)
 	customLabelMatches := CustomLabelRegex.FindAllStringSubmatch(line, -1)
@@ -22,25 +25,36 @@ func Handle(gc *github.Client,line string, req types.IssueCommentOuter) error {
 
 	ctx := context.Background()
 
-	org := req.Repository.Owner.Login
-	repo := req.Repository.Name
 	var (
-		labelsToAdd         []string
-		labelsToRemove      []string
+		org    = req.Repository.Owner.Login
+		repo   = req.Repository.Name
+		number = req.Issue.Number
+		user   = req.Comment.User.Login
+
+		labelsToAdd    []string
+		labelsToRemove []string
 	)
+	isAuthor, _, err := gc.Organizations.IsMember(ctx, org, user)
+	IsCollaborator, _, err := gc.Repositories.IsCollaborator(ctx, org, repo, user)
+	perm := false
+	if isAuthor || IsCollaborator {
+		perm = true
+	}
+	labelsToAdd = append(getLabelsFromREMatches(labelMatches), getLabelsFromGenericMatches(customLabelMatches, perm)...)
+	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches, perm)...)
 
+	if err != nil {
+		return err
+	}
 
-	labelsToAdd = append(getLabelsFromREMatches(labelMatches), getLabelsFromGenericMatches(customLabelMatches)...)
-	labelsToRemove = append(getLabelsFromREMatches(removeLabelMatches), getLabelsFromGenericMatches(customRemoveLabelMatches)...)
-
-	// * Add labels to issue
-	if _, _, err := gc.Issues.AddLabelsToIssue(ctx,org,repo,req.Issue.Number,labelsToAdd); err != nil {
+	// * Add labels to label
+	if _, _, err := gc.Issues.AddLabelsToIssue(ctx, org, repo, int(number), labelsToAdd); err != nil {
 		return fmt.Errorf("GitHub failed to add the following labels: %v", labelsToAdd)
 	}
 
-	// * Remove labels from issue
+	// * Remove labels from label
 	for _, labelToRemove := range labelsToRemove {
-		if _, err := gc.Issues.RemoveLabelForIssue(ctx,org,repo,req.Issue.Number,labelToRemove); err != nil {
+		if _, err := gc.Issues.RemoveLabelForIssue(ctx, org, repo, int(number), labelToRemove); err != nil {
 			return fmt.Errorf("GitHub failed to add the following label: %s", labelsToAdd)
 		}
 	}
@@ -57,9 +71,14 @@ func getLabelsFromREMatches(matches [][]string) (labels []string) {
 	}
 	return
 }
-func getLabelsFromGenericMatches(matches [][]string) []string {
+func getLabelsFromGenericMatches(matches [][]string, perm bool) []string {
 
 	var labels []string
+
+	if !perm {
+		return labels
+	}
+
 	for _, match := range matches {
 		parts := strings.Split(strings.TrimSpace(match[0]), " ")
 		if ((parts[0] != "/label") && (parts[0] != "/remove-label")) || len(parts) != 2 {

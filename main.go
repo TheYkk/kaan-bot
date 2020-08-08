@@ -2,203 +2,136 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/google/go-github/github"
-	log "github.com/sirupsen/logrus"
-	ghub "kaan-bot/github"
+	webhook "gopkg.in/go-playground/webhooks.v5/github"
+	ghclient "kaan-bot/github"
 	"kaan-bot/helper"
-	"kaan-bot/plugins/issue"
-	"kaan-bot/types"
+	"kaan-bot/plugins/label"
+	"kaan-bot/plugins/size"
+	"kaan-bot/plugins/title"
 	"math"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
-	Version   = "dev"
-	GitCommit = "HEAD"
+	Version = "dev"
 )
 
 func init() {
-	// Log as JSON instead of the default ASCII formatter.
 	log.SetFormatter(&log.JSONFormatter{})
-
-	// Only log the warning severity or above.
-	// log.SetLevel(log.WarnLevel)
+	log.SetReportCaller(true)
 }
 
 func main() {
-	log.Printf("Init kaan-bot %s %s ", Version, GitCommit)
+	log.Printf("Init kaan-bot %s", Version)
+
+	secret := helper.Getenv("GITHUB_SECRET", "")
+	if secret == "" {
+		log.Fatal("Github webhook secret not set")
+		return
+	}
+
+	token := helper.Getenv("GITHUB_TOKEN", "")
+	if token == "" {
+		log.Error("Github token not set")
+
+	}
 
 	// ? Create http server
-	r := gin.Default()
+	server := gin.Default()
 
 	// ? Set logger to logrus
-	r.Use(Logger(log.New()), gin.Recovery())
-	r.GET("/health" , func(c *gin.Context) {
-		c.String(200,"OK")
+	server.Use(Logger(log.New()), gin.Recovery())
+
+	server.GET("/version", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"version": Version,
+		})
 	})
-	r.POST("/", func(c *gin.Context) {
 
-		// * Get gihtub signature
-		xHubSignature := c.GetHeader("X-Hub-Signature")
+	server.GET("/health", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
 
-		secret := helper.Getenv("GITHUB_SECRET", "")
-		if secret == "" {
-			log.Fatal("Github webhook secret not set")
-			return
-		}
-		// * Validate request
+	server.POST("/", func(c *gin.Context) {
 
-		rawData ,_:=c.GetRawData()
-		err := ghub.Validate(rawData, xHubSignature, secret)
+		hook, _ := webhook.New(webhook.Options.Secret(secret))
+		payload, err := hook.Parse(c.Request, webhook.ReleaseEvent, webhook.PullRequestEvent, webhook.IssueCommentEvent)
 		if err != nil {
-			log.Fatal(err)
-		}
-
-		// ? Login with cred
-		token := helper.Getenv("GITHUB_TOKEN", "")
-		if token == "" {
-			log.Error("Github token not set")
-
-		}
-		ctx := context.Background()
-		client := ghub.Login(ctx, token)
-
-		// ? Handle all events from github
-		event := c.GetHeader("X-GitHub-Event")
-		
-		eventErr :=handleEvent(client ,event, rawData)
-		if eventErr != nil {
-			log.Error(eventErr)
-		}
-
-	})
-
-	// ? listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
-	r.Run()
-}
-
-
-//TTT
-func handleEvent(gc *github.Client, eventType string, bytesIn []byte) error {
-
-	switch eventType {
-	case "release":
-		//req := github.ReleaseEvent{}
-
-		//if err := json.Unmarshal(bytesIn, &req); err != nil {
-		//	return fmt.Errorf("Cannot parse input %s", err.Error())
-		//}
-		//
-		//if req.GetAction() == "created" {
-		//	customer, err := auth.IsCustomer(req.Repo.Owner.GetLogin(), &http.Client{})
-		//	if err != nil {
-		//		return fmt.Errorf("unable to verify customer: %s/%s", req.Repo.Owner.GetLogin(), req.Repo.GetName())
-		//	} else if customer == false {
-		//		return fmt.Errorf("no customer found for: %s/%s", req.Repo.Owner.GetLogin(), req.Repo.GetName())
-		//	}
-		//
-		//	var derekConfig *types.DerekRepoConfig
-		//	if req.Repo.GetPrivate() {
-		//		derekConfig, err = handler.GetPrivateRepoConfig(req.Repo.Owner.GetLogin(), req.Repo.GetName(), int(req.Installation.GetID()), config)
-		//		if err != nil {
-		//			return fmt.Errorf("unable to get private repo config: %s", err)
-		//		}
-		//	} else {
-		//		derekConfig, err = handler.GetRepoConfig(req.Repo.Owner.GetLogin(), req.Repo.GetName())
-		//		if err != nil {
-		//			return fmt.Errorf("unable to get repo config: %s", err)
-		//		}
-		//	}
-		//
-		//	err = fmt.Errorf(`"release_notes" feature not enabled`)
-		//	if handler.EnabledFeature(releaseNotes, derekConfig) {
-		//
-		//		handler := handler.NewReleaseHandler(config, int(req.Installation.GetID()))
-		//		err = handler.Handle(req)
-		//	}
-		//	return err
-		//}
-		break
-
-	case "pull_request":
-		//req := types.PullRequestOuter{}
-		//if err := json.Unmarshal(bytesIn, &req); err != nil {
-		//	return fmt.Errorf("Cannot parse input %s", err.Error())
-		//}
-		//
-		//customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
-		//if err != nil {
-		//	return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		//} else if customer == false {
-		//	return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		//}
-		//
-		//var derekConfig *types.DerekRepoConfig
-		//if req.Repository.Private {
-		//	derekConfig, err = handler.GetPrivateRepoConfig(req.Repository.Owner.Login, req.Repository.Name, req.Installation.ID, config)
-		//} else {
-		//	derekConfig, err = handler.GetRepoConfig(req.Repository.Owner.Login, req.Repository.Name)
-		//}
-		//if err != nil {
-		//	return fmt.Errorf("Unable to access maintainers file at: %s/%s\nError: %s",
-		//		req.Repository.Owner.Login,
-		//		req.Repository.Name,
-		//		err.Error())
-		//}
-		//
-		//if req.Action != handler.ClosedConstant && req.PullRequest.State != handler.ClosedConstant {
-		//	contributingURL := getContributingURL(derekConfig.ContributingURL, req.Repository.Owner.Login, req.Repository.Name)
-		//	if handler.EnabledFeature(hacktoberfest, derekConfig) {
-		//		isSpamPR, _ := handler.HandleHacktoberfestPR(req, contributingURL, config)
-		//		if isSpamPR {
-		//			return nil
-		//		}
-		//	}
-		//	if handler.EnabledFeature(dcoCheck, derekConfig) {
-		//		handler.HandlePullRequest(req, contributingURL, config)
-		//	}
-		//	if handler.EnabledFeature(prDescriptionRequired, derekConfig) {
-		//		handler.VerifyPullRequestDescription(req, contributingURL, config)
-		//	}
-		//}
-		break
-
-	case "issue_comment":
-		// * Parse event to req
-		req := types.IssueCommentOuter{}
-		if err := json.Unmarshal(bytesIn, &req); err != nil {
-			return fmt.Errorf("Cannot parse input %s", err.Error())
-		}
-
-		lines := strings.Split(req.Comment.Body, "\n")
-		// * Parse lines
-
-		for  _, line := range lines {
-			labelMatches := issue.LabelRegex.FindAllStringSubmatch(line, -1)
-			removeLabelMatches := issue.RemoveLabelRegex.FindAllStringSubmatch(line, -1)
-			customLabelMatches := issue.CustomLabelRegex.FindAllStringSubmatch(line, -1)
-			customRemoveLabelMatches := issue.CustomRemoveLabelRegex.FindAllStringSubmatch(line, -1)
-
-			// * If any match with regex sent to issue handler
-			if len(labelMatches) == 1 || len(removeLabelMatches) == 1 || len(customLabelMatches) == 1 || len(customRemoveLabelMatches) == 1 {
-				err := issue.Handle(gc, line,req)
-				if err != nil{
-					log.Error(err)
-				}
+			if err == webhook.ErrEventNotFound {
+				log.Error(err)
 			}
 		}
 
-		break
-	default:
-		return fmt.Errorf("X_Github_Event want: ['pull_request', 'issue_comment'], got: " + eventType)
-	}
+		ctx := context.Background()
+		// ? Login to github
+		client := ghclient.Login(ctx, token)
 
-	return nil
+		switch payload.(type) {
+
+		case webhook.PullRequestPayload:
+			log.Info("Is pull request")
+			pullRequest := payload.(webhook.PullRequestPayload)
+
+			// TODO: Size plugin
+
+			err := size.Handle(client, pullRequest)
+			if err != nil {
+				log.Error(err)
+			}
+
+			// TODO: DCO
+
+		case webhook.IssueCommentPayload:
+			comment := payload.(webhook.IssueCommentPayload)
+			lines := strings.Split(comment.Comment.Body, "\n")
+
+			// * Parse lines
+			for _, line := range lines {
+
+				log.Print(line)
+
+				labelMatches := label.LabelRegex.FindAllStringSubmatch(line, -1)
+				removeLabelMatches := label.RemoveLabelRegex.FindAllStringSubmatch(line, -1)
+				customLabelMatches := label.CustomLabelRegex.FindAllStringSubmatch(line, -1)
+				customRemoveLabelMatches := label.CustomRemoveLabelRegex.FindAllStringSubmatch(line, -1)
+
+				// * If any match with regex sent to label handler
+				if len(labelMatches) == 1 || len(removeLabelMatches) == 1 || len(customLabelMatches) == 1 || len(customRemoveLabelMatches) == 1 {
+					err := label.Handle(client, line, comment)
+					if err != nil {
+						log.Error(err)
+					}
+				}
+				// * If any match with regex sent to title handler
+				retitleMatches := title.RetitleRegex.FindAllStringSubmatch(line, -1)
+				if len(retitleMatches) == 1 {
+					err := title.Handle(client, line, comment)
+					if err != nil {
+						log.Error(err)
+					}
+				}
+
+				// TODO: lgtm
+
+				// TODO: assign
+			}
+		}
+
+		// ? Login with cred
+		c.String(200, "Event received. Have a nice day")
+	})
+
+	// ? listen and serve on 0.0.0.0:8181
+	err := server.Run("0.0.0.0:8181")
+	if err != nil {
+		log.Fatalf("Server err %s", err)
+	}
 }
 
 var timeFormat = "02/Jan/2006:15:04:05 -0700"
