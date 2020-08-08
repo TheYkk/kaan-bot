@@ -7,6 +7,7 @@ import (
 	ghclient "kaan-bot/github"
 	"kaan-bot/helper"
 	"kaan-bot/plugins/label"
+	"kaan-bot/plugins/size"
 	"kaan-bot/plugins/title"
 	"math"
 	"os"
@@ -63,7 +64,7 @@ func main() {
 		payload, err := hook.Parse(c.Request, webhook.ReleaseEvent, webhook.PullRequestEvent, webhook.IssueCommentEvent)
 		if err != nil {
 			if err == webhook.ErrEventNotFound {
-				// ok event wasn;t one of the ones asked to be parsed
+				log.Error(err)
 			}
 		}
 
@@ -74,11 +75,16 @@ func main() {
 		switch payload.(type) {
 
 		case webhook.PullRequestPayload:
+			log.Info("Is pull request")
 			pullRequest := payload.(webhook.PullRequestPayload)
-			// Do whatever you want from here...
-			fmt.Printf("%+v", pullRequest.Repository.FullName)
 
 			// TODO: Size plugin
+
+			err := size.Handle(client, pullRequest)
+			if err != nil {
+				log.Error(err)
+			}
+
 			// TODO: DCO
 
 		case webhook.IssueCommentPayload:
@@ -118,7 +124,7 @@ func main() {
 		}
 
 		// ? Login with cred
-
+		c.String(200, "Event received. Have a nice day")
 	})
 
 	// ? listen and serve on 0.0.0.0:8181
