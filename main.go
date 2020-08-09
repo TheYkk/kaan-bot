@@ -7,6 +7,7 @@ import (
 	ghclient "kaan-bot/github"
 	"kaan-bot/helper"
 	"kaan-bot/plugins/label"
+	"kaan-bot/plugins/lgtm"
 	"kaan-bot/plugins/size"
 	"kaan-bot/plugins/title"
 	"math"
@@ -78,13 +79,16 @@ func main() {
 			log.Info("Is pull request")
 			pullRequest := payload.(webhook.PullRequestPayload)
 
-			// TODO: Size plugin
-
 			err := size.Handle(client, pullRequest)
 			if err != nil {
 				log.Error(err)
 			}
 
+			// ? Remove labels
+			errLabel := lgtm.RemoveLabel(client, pullRequest)
+			if err != nil {
+				log.Error(errLabel)
+			}
 			// TODO: DCO
 
 		case webhook.IssueCommentPayload:
@@ -118,7 +122,15 @@ func main() {
 				}
 
 				// TODO: lgtm
+				lgtmMatches := lgtm.LGTMRe.FindAllStringSubmatch(line, -1)
+				lgtmcancelMatches := lgtm.LGTMCancelRe.FindAllStringSubmatch(line, -1)
 
+				if len(lgtmMatches) == 1 || len(lgtmcancelMatches) == 1 {
+					err := lgtm.Handle(client, line, comment)
+					if err != nil {
+						log.Error(err)
+					}
+				}
 				// TODO: assign
 			}
 		}
