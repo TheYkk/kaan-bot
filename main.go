@@ -13,22 +13,25 @@ import (
 	"kaan-bot/plugins/title"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
-
+// ? Version of build
 var (
 	Version = "dev"
 )
-var port = flag.String("port",helper.Getenv("PORT", string(rune(8181))),"Port to listen on for HTTP")
+
+var port = flag.String("port",helper.Getenv("PORT", strconv.Itoa(8181)),"Port to listen on for HTTP")
 var printVersion = flag.Bool("v",false,"Print version")
 var help = flag.Bool("help",false,"Get Help")
 var listen = flag.String("listen",helper.Getenv("LISTEN", "0.0.0.0"), "IPv4 address to listen on")
 
 func init() {
+
 	flag.Usage = func() {
 		flag.PrintDefaults()
 		os.Exit(0)
@@ -62,7 +65,7 @@ func main() {
 	}
 
 	// ? Create http server
-	server := gin.Default()
+	server := gin.New()
 
 	// ? Set logger to logrus
 	server.Use(Logger(log.New()), gin.Recovery())
@@ -157,7 +160,7 @@ func main() {
 	})
 
 	// ? listen and serve on default 0.0.0.0:8181
-	err := server.Run(*listen + *port)
+	err := server.Run(*listen + ":" + *port)
 	if err != nil {
 		log.Fatalf("Server err %s", err)
 	}
