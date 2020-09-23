@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	webhook "gopkg.in/go-playground/webhooks.v5/github"
 	ghclient "kaan-bot/github"
@@ -22,8 +23,25 @@ import (
 var (
 	Version = "dev"
 )
+var port = flag.String("port",helper.Getenv("PORT", string(rune(8181))),"Port to listen on for HTTP")
+var printVersion = flag.Bool("v",false,"Print version")
+var help = flag.Bool("help",false,"Get Help")
+var listen = flag.String("listen",helper.Getenv("LISTEN", "0.0.0.0"), "IPv4 address to listen on")
 
 func init() {
+	flag.Usage = func() {
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+	flag.Parse()
+	if *help {
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+	if *printVersion {
+		fmt.Print(Version)
+		os.Exit(0)
+	}
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetReportCaller(true)
 }
@@ -59,7 +77,11 @@ func main() {
 		c.String(200, "OK")
 	})
 
-	server.POST("/", func(c *gin.Context) {
+	ctx := context.Background()
+	// ? Login to github
+	client := ghclient.Login(ctx, token)
+
+	server.POST("/webhook", func(c *gin.Context) {
 
 		hook, _ := webhook.New(webhook.Options.Secret(secret))
 		payload, err := hook.Parse(c.Request, webhook.ReleaseEvent, webhook.PullRequestEvent, webhook.IssueCommentEvent)
@@ -68,10 +90,6 @@ func main() {
 				log.Error(err)
 			}
 		}
-
-		ctx := context.Background()
-		// ? Login to github
-		client := ghclient.Login(ctx, token)
 
 		switch payload.(type) {
 
@@ -135,18 +153,17 @@ func main() {
 			}
 		}
 
-		// ? Login with cred
 		c.String(200, "Event received. Have a nice day")
 	})
 
-	// ? listen and serve on 0.0.0.0:8181
-	err := server.Run("0.0.0.0:8181")
+	// ? listen and serve on default 0.0.0.0:8181
+	err := server.Run(*listen + *port)
 	if err != nil {
 		log.Fatalf("Server err %s", err)
 	}
 }
 
-var timeFormat = "02/Jan/2006:15:04:05 -0700"
+var timeFormat = "2006-01-02T15:04:05-07:00"
 
 func Logger(logger log.FieldLogger) gin.HandlerFunc {
 	hostname, err := os.Hostname()
