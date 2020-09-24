@@ -13,6 +13,7 @@ import (
 	"kaan-bot/plugins/lgtm"
 	"kaan-bot/plugins/size"
 	"kaan-bot/plugins/title"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -153,22 +154,23 @@ func main() {
 
 		_, _ = fmt.Fprint(w, "Event received. Have a nice day")
 	}).Methods("POST")
-	nextRequestID := func() string {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
-	}
+
 	// ? listen and serve on default 0.0.0.0:8181
 	srv := &http.Server{
-		Handler: tracing(nextRequestID)(logging()(router)),
+		Handler: tracing()(logging()(router)),
 		Addr:    *listen + ":" + *port,
 		// ! Good practice: enforce timeouts for servers you create!
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
-
+	log.Info("Serve at: ",*listen + ":" + *port)
+	//log.Fatal(srv.ListenAndServe())
 	err := srv.ListenAndServe()
 	if err != nil {
 		log.Fatalf("Server err %s", err)
 	}
+
+
 }
 type key int
 
@@ -182,46 +184,51 @@ func logging() func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
-				requestID, ok := r.Context().Value(requestIDKey).(string)
-				if !ok {
-					requestID = "unknown"
-				}
 
-				hostname, err := os.Hostname()
-				if err != nil {
-					hostname = "unknow"
-				}
+			requestID, ok := r.Context().Value(requestIDKey).(string)
+			if !ok {
+				requestID = "unknown"
+			}
 
-				log.WithFields(log.Fields{
-					"hostname":   hostname,
-					"requestID":   requestID,
-					"statusCode": r.Response.StatusCode,
-					"time" : time.Now().Format(timeFormat),
-					//"latency":    latency, // time to process
-					"clientIP":   r.RemoteAddr,
-					"method":     r.Method,
-					"path":       r.URL.Path,
-					"referer":    r.Referer(),
-					"dataLength": r.Response.Status,
-					"userAgent":  r.UserAgent(),
-				})
+			hostname, err := os.Hostname()
+			if err != nil {
+				hostname = "unknow"
+			}
 
-			}()
-			//start := time.Now()
+			start := time.Now()
+
 			next.ServeHTTP(w, r)
-			//stop := time.Since(start)
-			//latency := int(math.Ceil(float64(stop.Nanoseconds()) / 1000000.0))
 
+			stop := time.Since(start)
+			latency := int(math.Ceil(float64(stop.Nanoseconds()) / 1000000.0))
+
+			IPAddress := r.Header.Get("X-Real-Ip")
+			if IPAddress == "" {
+				IPAddress = r.Header.Get("X-Forwarded-For")
+			}
+			if IPAddress == "" {
+				IPAddress = r.RemoteAddr
+			}
+
+			log.WithFields(log.Fields{
+				"hostname":   hostname,
+				"requestID":   requestID,
+				"latency":    latency, // time to process
+				"clientIP":   IPAddress,
+				"method":     r.Method,
+				"path":       r.URL.Path,
+				"referer":    r.Referer(),
+				"userAgent":  r.UserAgent(),
+			}).Info("Request")
 		})
 	}
 }
-func tracing(nextRequestID func() string) func(http.Handler) http.Handler {
+func tracing() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := r.Header.Get("X-Request-Id")
 			if requestID == "" {
-				requestID = nextRequestID()
+				requestID = fmt.Sprintf("%d", time.Now().UnixNano())
 			}
 			ctx := context.WithValue(r.Context(), requestIDKey, requestID)
 			w.Header().Set("X-Request-Id", requestID)
