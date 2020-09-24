@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/go-github/github"
-	webhook "gopkg.in/go-playground/webhooks.v5/github"
+	ghclient "kaan-bot/github"
 	"regexp"
 	"strings"
 )
@@ -13,17 +13,17 @@ var (
 	RetitleRegex = regexp.MustCompile(`(?mi)^/retitle\s*(.*)$`)
 )
 
-func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
+func Handle(gc *github.Client, line string, comment ghclient.Comment) error {
 	// ? Make sure they are requesting a re-title
 	if !RetitleRegex.MatchString(line) {
 		return nil
 	}
 
 	var (
-		org    = req.Repository.Owner.Login
-		repo   = req.Repository.Name
-		number = req.Issue.Number
-		user   = req.Comment.User.Login
+		org    = comment.Org
+		repo   = comment.Repo
+		number = comment.Number
+		user   = comment.User
 	)
 	ctx := context.Background()
 
@@ -57,7 +57,7 @@ func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) err
 	}
 
 	// ? Is pull request
-	if req.Issue.PullRequest.URL != "" {
+	if comment.IsPullRequest {
 		_, _, err := gc.PullRequests.Edit(ctx, org, repo, int(number), &github.PullRequest{
 			Title: &newTitle,
 		})

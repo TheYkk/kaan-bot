@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/go-github/github"
-	webhook "gopkg.in/go-playground/webhooks.v5/github"
+	log "github.com/sirupsen/logrus"
+	ghclient "kaan-bot/github"
 	"regexp"
 	"strings"
 )
@@ -16,8 +17,8 @@ var (
 	CustomRemoveLabelRegex = regexp.MustCompile(`(?m)^/remove-label\s*(.*?)\s*$`)
 )
 
-func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
-
+func Handle(gc *github.Client, line string, comment ghclient.Comment) error {
+	log.Info("Label plugin")
 	labelMatches := LabelRegex.FindAllStringSubmatch(line, -1)
 	removeLabelMatches := RemoveLabelRegex.FindAllStringSubmatch(line, -1)
 	customLabelMatches := CustomLabelRegex.FindAllStringSubmatch(line, -1)
@@ -26,10 +27,10 @@ func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) err
 	ctx := context.Background()
 
 	var (
-		org    = req.Repository.Owner.Login
-		repo   = req.Repository.Name
-		number = req.Issue.Number
-		user   = req.Comment.User.Login
+		org    = comment.Org
+		repo   = comment.Repo
+		number = comment.Number
+		user   = comment.User
 
 		labelsToAdd    []string
 		labelsToRemove []string

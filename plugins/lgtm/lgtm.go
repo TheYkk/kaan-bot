@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/sirupsen/logrus"
 	webhook "gopkg.in/go-playground/webhooks.v5/github"
+	ghclient "kaan-bot/github"
 	"kaan-bot/plugins/labels"
 	"regexp"
 )
@@ -53,15 +54,15 @@ func RemoveLabel(gc *github.Client, req webhook.PullRequestPayload) error {
 	return nil
 }
 
-func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) error {
+func Handle(gc *github.Client, line string, comment ghclient.Comment) error {
 	ctx := context.Background()
 
 	var (
-		org         = req.Repository.Owner.Login
-		repo        = req.Repository.Name
-		number      = req.Issue.Number
-		user        = req.Comment.User.Login
-		issueAuthor = req.Issue.User.Login
+		org    = comment.Org
+		repo   = comment.Repo
+		number = comment.Number
+		user   = comment.User
+		issueAuthor = comment.IssueAuthor
 	)
 
 	isAuthor, _, err := gc.Organizations.IsMember(ctx, org, user)
@@ -72,14 +73,14 @@ func Handle(gc *github.Client, line string, req webhook.IssueCommentPayload) err
 	}
 
 	// ? If is not pr return
-	if req.Issue.PullRequest.URL == "" || req.Issue.State != "open" {
+	if !comment.IsPullRequest || comment.State != "open" {
 		return nil
 	}
 
 	//? Author cannot LGTM own PR, comment and abort
 	isOwnPR := user == issueAuthor
 	if isOwnPR {
-		resp := "you cannot LGTM your own PR."
+		resp := "@"+ user +" you cannot LGTM your own PR."
 		logrus.Infof("Commenting with \"%s\".", resp)
 		_, _, err = gc.Issues.CreateComment(ctx, org, repo, int(number), &github.IssueComment{
 			Body: &resp,
