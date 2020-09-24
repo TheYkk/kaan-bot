@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/google/go-github/github"
 	"github.com/gorilla/mux"
 	webhook "gopkg.in/go-playground/webhooks.v5/github"
 	ghclient "kaan-bot/github"
@@ -86,7 +87,7 @@ func main() {
 		payload, err := hook.Parse(r, webhook.ReleaseEvent, webhook.PullRequestEvent, webhook.IssueCommentEvent)
 		if err != nil {
 			if err == webhook.ErrEventNotFound {
-				log.Error(err)
+				log.WithField("event", r.Header.Get("X-GitHub-Event")).Error(err)
 			}
 		}
 
@@ -95,6 +96,20 @@ func main() {
 		case webhook.PullRequestPayload:
 			log.Info("Is pull request")
 			pullRequest := payload.(webhook.PullRequestPayload)
+
+			// TODO: Assing random people
+			comment := ghclient.Comment{
+				Org:    pullRequest.Repository.Owner.Login,
+				Repo:	pullRequest.Repository.Name,
+				Number:	pullRequest.Number,
+				User:	pullRequest.Sender.Login,
+				IsPullRequest: true,
+				IssueAuthor: pullRequest.Sender.Login,
+				State: pullRequest.Action,
+			}
+
+			lines := strings.Split(pullRequest.PullRequest.Body, "\n")
+			parseLines(client,lines,comment)
 
 			err := size.Handle(client, pullRequest)
 			if err != nil {
@@ -109,47 +124,19 @@ func main() {
 			// TODO: DCO
 
 		case webhook.IssueCommentPayload:
-			comment := payload.(webhook.IssueCommentPayload)
-			lines := strings.Split(comment.Comment.Body, "\n")
+			commentPayload := payload.(webhook.IssueCommentPayload)
 
-			// * Parse lines
-			for _, line := range lines {
-
-				log.Print(line)
-
-				labelMatches := label.LabelRegex.FindAllStringSubmatch(line, -1)
-				removeLabelMatches := label.RemoveLabelRegex.FindAllStringSubmatch(line, -1)
-				customLabelMatches := label.CustomLabelRegex.FindAllStringSubmatch(line, -1)
-				customRemoveLabelMatches := label.CustomRemoveLabelRegex.FindAllStringSubmatch(line, -1)
-
-				// * If any match with regex sent to label handler
-				if len(labelMatches) == 1 || len(removeLabelMatches) == 1 || len(customLabelMatches) == 1 || len(customRemoveLabelMatches) == 1 {
-					err := label.Handle(client, line, comment)
-					if err != nil {
-						log.Error(err)
-					}
-				}
-				// * If any match with regex sent to title handler
-				retitleMatches := title.RetitleRegex.FindAllStringSubmatch(line, -1)
-				if len(retitleMatches) == 1 {
-					err := title.Handle(client, line, comment)
-					if err != nil {
-						log.Error(err)
-					}
-				}
-
-				// TODO: lgtm
-				lgtmMatches := lgtm.LGTMRe.FindAllStringSubmatch(line, -1)
-				lgtmcancelMatches := lgtm.LGTMCancelRe.FindAllStringSubmatch(line, -1)
-
-				if len(lgtmMatches) == 1 || len(lgtmcancelMatches) == 1 {
-					err := lgtm.Handle(client, line, comment)
-					if err != nil {
-						log.Error(err)
-					}
-				}
-				// TODO: assign
+			comment := ghclient.Comment{
+				Org:    commentPayload.Repository.Owner.Login,
+				Repo:	commentPayload.Repository.Name,
+				Number:	commentPayload.Issue.Number,
+				User:	commentPayload.Comment.User.Login,
+				IsPullRequest: commentPayload.Issue.PullRequest.URL != "",
+				IssueAuthor: commentPayload.Issue.User.Login,
+				State: commentPayload.Issue.State,
 			}
+			lines := strings.Split(commentPayload.Comment.Body, "\n")
+			parseLines(client,lines,comment)
 		}
 
 		_, _ = fmt.Fprint(w, "Event received. Have a nice day")
@@ -172,13 +159,48 @@ func main() {
 
 
 }
-type key int
+func parseLines(client *github.Client,lines []string,comment ghclient.Comment)  {
+	// * Parse lines
+	for _, line := range lines {
+		log.Debug(lines)
+		labelMatches := label.LabelRegex.FindAllStringSubmatch(line, -1)
+		removeLabelMatches := label.RemoveLabelRegex.FindAllStringSubmatch(line, -1)
+		customLabelMatches := label.CustomLabelRegex.FindAllStringSubmatch(line, -1)
+		customRemoveLabelMatches := label.CustomRemoveLabelRegex.FindAllStringSubmatch(line, -1)
 
+		// * If any match with regex sent to label handler
+		if len(labelMatches) == 1 || len(removeLabelMatches) == 1 || len(customLabelMatches) == 1 || len(customRemoveLabelMatches) == 1 {
+			err := label.Handle(client, line, comment)
+			if err != nil {
+				log.Error(err)
+			}
+		}
+		// * If any match with regex sent to title handler
+		retitleMatches := title.RetitleRegex.FindAllStringSubmatch(line, -1)
+		if len(retitleMatches) == 1 {
+			err := title.Handle(client, line, comment)
+			if err != nil {
+				log.Error(err)
+			}
+		}
+
+		// TODO: lgtm
+		lgtmMatches := lgtm.LGTMRe.FindAllStringSubmatch(line, -1)
+		lgtmcancelMatches := lgtm.LGTMCancelRe.FindAllStringSubmatch(line, -1)
+
+		if len(lgtmMatches) == 1 || len(lgtmcancelMatches) == 1 {
+			err := lgtm.Handle(client, line, comment)
+			if err != nil {
+				log.Error(err)
+			}
+		}
+		// TODO: assign
+	}
+}
+type key int
 const (
 	requestIDKey key = 0
 )
-
-var timeFormat = "2006-01-02T15:04:05-07:00"
 
 func logging() func(http.Handler) http.Handler {
 
@@ -217,6 +239,7 @@ func logging() func(http.Handler) http.Handler {
 				"clientIP":   IPAddress,
 				"method":     r.Method,
 				"path":       r.URL.Path,
+				"header":     r.Header,
 				"referer":    r.Referer(),
 				"userAgent":  r.UserAgent(),
 			}).Info("Request")
