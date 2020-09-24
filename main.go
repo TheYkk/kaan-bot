@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/gorilla/mux"
 	webhook "gopkg.in/go-playground/webhooks.v5/github"
 	ghclient "kaan-bot/github"
 	"kaan-bot/helper"
@@ -11,13 +13,12 @@ import (
 	"kaan-bot/plugins/lgtm"
 	"kaan-bot/plugins/size"
 	"kaan-bot/plugins/title"
-	"math"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
 // ? Version of build
@@ -65,29 +66,23 @@ func main() {
 	}
 
 	// ? Create http server
-	server := gin.New()
+	router := mux.NewRouter()
 
-	// ? Set logger to logrus
-	server.Use(Logger(log.New()), gin.Recovery())
+	router.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": Version})
+	}).Methods("GET")
 
-	server.GET("/version", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"version": Version,
-		})
-	})
-
-	server.GET("/health", func(c *gin.Context) {
-		c.String(200, "OK")
-	})
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "OK")
+	}).Methods("GET")
 
 	ctx := context.Background()
 	// ? Login to github
 	client := ghclient.Login(ctx, token)
 
-	server.POST("/webhook", func(c *gin.Context) {
-
+	router.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
 		hook, _ := webhook.New(webhook.Options.Secret(secret))
-		payload, err := hook.Parse(c.Request, webhook.ReleaseEvent, webhook.PullRequestEvent, webhook.IssueCommentEvent)
+		payload, err := hook.Parse(r, webhook.ReleaseEvent, webhook.PullRequestEvent, webhook.IssueCommentEvent)
 		if err != nil {
 			if err == webhook.ErrEventNotFound {
 				log.Error(err)
@@ -156,62 +151,81 @@ func main() {
 			}
 		}
 
-		c.String(200, "Event received. Have a nice day")
-	})
-
+		_, _ = fmt.Fprint(w, "Event received. Have a nice day")
+	}).Methods("POST")
+	nextRequestID := func() string {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
 	// ? listen and serve on default 0.0.0.0:8181
-	err := server.Run(*listen + ":" + *port)
+	srv := &http.Server{
+		Handler: tracing(nextRequestID)(logging()(router)),
+		Addr:    *listen + ":" + *port,
+		// ! Good practice: enforce timeouts for servers you create!
+		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  15 * time.Second,
+	}
+
+	err := srv.ListenAndServe()
 	if err != nil {
 		log.Fatalf("Server err %s", err)
 	}
 }
+type key int
+
+const (
+	requestIDKey key = 0
+)
 
 var timeFormat = "2006-01-02T15:04:05-07:00"
 
-func Logger(logger log.FieldLogger) gin.HandlerFunc {
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknow"
-	}
-	return func(c *gin.Context) {
-		// other handler can change c.Path so:
-		path := c.Request.URL.Path
-		start := time.Now()
-		c.Next()
-		stop := time.Since(start)
-		latency := int(math.Ceil(float64(stop.Nanoseconds()) / 1000000.0))
-		statusCode := c.Writer.Status()
-		clientIP := c.ClientIP()
-		clientUserAgent := c.Request.UserAgent()
-		referer := c.Request.Referer()
-		dataLength := c.Writer.Size()
-		if dataLength < 0 {
-			dataLength = 0
-		}
+func logging() func(http.Handler) http.Handler {
 
-		entry := log.WithFields(log.Fields{
-			"hostname":   hostname,
-			"statusCode": statusCode,
-			"latency":    latency, // time to process
-			"clientIP":   clientIP,
-			"method":     c.Request.Method,
-			"path":       path,
-			"referer":    referer,
-			"dataLength": dataLength,
-			"userAgent":  clientUserAgent,
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				requestID, ok := r.Context().Value(requestIDKey).(string)
+				if !ok {
+					requestID = "unknown"
+				}
+
+				hostname, err := os.Hostname()
+				if err != nil {
+					hostname = "unknow"
+				}
+
+				log.WithFields(log.Fields{
+					"hostname":   hostname,
+					"requestID":   requestID,
+					"statusCode": r.Response.StatusCode,
+					"time" : time.Now().Format(timeFormat),
+					//"latency":    latency, // time to process
+					"clientIP":   r.RemoteAddr,
+					"method":     r.Method,
+					"path":       r.URL.Path,
+					"referer":    r.Referer(),
+					"dataLength": r.Response.Status,
+					"userAgent":  r.UserAgent(),
+				})
+
+			}()
+			//start := time.Now()
+			next.ServeHTTP(w, r)
+			//stop := time.Since(start)
+			//latency := int(math.Ceil(float64(stop.Nanoseconds()) / 1000000.0))
+
 		})
-
-		if len(c.Errors) > 0 {
-			entry.Error(c.Errors.ByType(gin.ErrorTypePrivate).String())
-		} else {
-			msg := fmt.Sprintf("%s - %s [%s] \"%s %s\" %d %d \"%s\" \"%s\" (%dms)", clientIP, hostname, time.Now().Format(timeFormat), c.Request.Method, path, statusCode, dataLength, referer, clientUserAgent, latency)
-			if statusCode > 499 {
-				entry.Error(msg)
-			} else if statusCode > 399 {
-				entry.Warn(msg)
-			} else {
-				entry.Info(msg)
+	}
+}
+func tracing(nextRequestID func() string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestID := r.Header.Get("X-Request-Id")
+			if requestID == "" {
+				requestID = nextRequestID()
 			}
-		}
+			ctx := context.WithValue(r.Context(), requestIDKey, requestID)
+			w.Header().Set("X-Request-Id", requestID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
 }
