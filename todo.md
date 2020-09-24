@@ -1,20 +1,17 @@
+# TODOS
 
 [] Auto release generate
-[x] Add label I
-[] Assign people I
-[] Run ci/cd 
-[] Size label
+[x] Add label
+[x] Lgtm
+[] Assign people
+[] Run ci/cd
+[X] Size label
 [] Block merge
 [] Block ci
-[] Welcome 
+[] Welcome
 [] Owners
 [] Config update
-[] Edit title I
+[x] Edit title
 [] DCO
 [] Close pr
-[] Milestone I
-
-
-
-
-
+[] Milestone
